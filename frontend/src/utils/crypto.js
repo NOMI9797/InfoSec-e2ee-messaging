@@ -232,3 +232,107 @@ export async function importPrivateKey(base64Key, algorithm = 'RSA-OAEP', namedC
   }
 }
 
+/**
+ * Encrypt message using AES-256-GCM
+ * @param {string} plaintext - Message to encrypt
+ * @param {CryptoKey} sessionKey - AES-GCM session key
+ * @returns {Promise<{ciphertext: string, iv: string, tag: string}>} Encrypted message components
+ */
+export async function encryptMessage(plaintext, sessionKey) {
+  try {
+    // Generate random IV (96 bits = 12 bytes for AES-GCM)
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    
+    // Convert plaintext to bytes
+    const plaintextBytes = new TextEncoder().encode(plaintext);
+    
+    // Encrypt using AES-GCM
+    // Note: AES-GCM returns ciphertext with tag appended
+    const encryptedData = await window.crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+        tagLength: 128 // 128-bit authentication tag
+      },
+      sessionKey,
+      plaintextBytes
+    );
+    
+    // Extract ciphertext and tag
+    // In AES-GCM, the tag is appended to the ciphertext
+    const encryptedArray = new Uint8Array(encryptedData);
+    const tagLength = 16; // 128 bits = 16 bytes
+    const actualCiphertext = encryptedArray.slice(0, -tagLength);
+    const tag = encryptedArray.slice(-tagLength);
+    
+    // Convert to base64 for storage/transmission
+    let ciphertextBase64 = '';
+    for (let i = 0; i < actualCiphertext.length; i++) {
+      ciphertextBase64 += String.fromCharCode(actualCiphertext[i]);
+    }
+    ciphertextBase64 = btoa(ciphertextBase64);
+    
+    let ivBase64 = '';
+    for (let i = 0; i < iv.length; i++) {
+      ivBase64 += String.fromCharCode(iv[i]);
+    }
+    ivBase64 = btoa(ivBase64);
+    
+    let tagBase64 = '';
+    for (let i = 0; i < tag.length; i++) {
+      tagBase64 += String.fromCharCode(tag[i]);
+    }
+    tagBase64 = btoa(tagBase64);
+    
+    return {
+      ciphertext: ciphertextBase64,
+      iv: ivBase64,
+      tag: tagBase64
+    };
+  } catch (error) {
+    console.error('Error encrypting message:', error);
+    throw error;
+  }
+}
+
+/**
+ * Decrypt message using AES-256-GCM
+ * @param {string} ciphertext - Encrypted message (base64)
+ * @param {string} iv - Initialization vector (base64)
+ * @param {string} tag - Authentication tag (base64)
+ * @param {CryptoKey} sessionKey - AES-GCM session key
+ * @returns {Promise<string>} Decrypted plaintext
+ */
+export async function decryptMessage(ciphertext, iv, tag, sessionKey) {
+  try {
+    // Decode base64 strings
+    const ciphertextBytes = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0));
+    const ivBytes = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+    const tagBytes = Uint8Array.from(atob(tag), c => c.charCodeAt(0));
+    
+    // Combine ciphertext and tag (AES-GCM expects them together)
+    const ciphertextWithTag = new Uint8Array(ciphertextBytes.length + tagBytes.length);
+    ciphertextWithTag.set(ciphertextBytes);
+    ciphertextWithTag.set(tagBytes, ciphertextBytes.length);
+    
+    // Decrypt using AES-GCM
+    const plaintextBytes = await window.crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: ivBytes,
+        tagLength: 128 // 128-bit authentication tag
+      },
+      sessionKey,
+      ciphertextWithTag
+    );
+    
+    // Convert bytes to string
+    const plaintext = new TextDecoder().decode(plaintextBytes);
+    
+    return plaintext;
+  } catch (error) {
+    console.error('Error decrypting message:', error);
+    throw new Error('Failed to decrypt message. The message may be corrupted or the key is incorrect.');
+  }
+}
+

@@ -5,6 +5,7 @@ import { connectDB } from './config/database.js';
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
 import keyExchangeRoutes from './routes/keyExchange.routes.js';
+import messageRoutes from './routes/message.routes.js';
 import errorHandler from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -30,6 +31,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/key-exchange', keyExchangeRoutes);
+app.use('/api/messages', messageRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

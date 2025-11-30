@@ -369,3 +369,31 @@ export async function getEphemeralKeyPair(exchangeId) {
   }
 }
 
+/**
+ * Get all available session keys (exchange IDs) from IndexedDB
+ * @returns {Promise<Array<string>>} Array of exchange IDs that have session keys
+ */
+export async function getAllSessionKeyIds() {
+  try {
+    const db = await openDB();
+    const transaction = db.transaction([SESSION_STORE_NAME], 'readonly');
+    const store = transaction.objectStore(SESSION_STORE_NAME);
+
+    return new Promise((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const sessionKeys = request.result || [];
+        // Filter out expired keys and return only valid exchange IDs
+        const validIds = sessionKeys
+          .filter(sk => new Date(sk.expiresAt) > new Date())
+          .map(sk => sk.sessionId);
+        resolve(validIds);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } catch (error) {
+    console.error('Error getting all session key IDs:', error);
+    return [];
+  }
+}
+

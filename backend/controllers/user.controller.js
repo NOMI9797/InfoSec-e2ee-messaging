@@ -1,5 +1,25 @@
 import User from '../models/User.model.js';
 
+// Get all users (for chat user list)
+export const getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find()
+      .select('username _id createdAt')
+      .sort({ username: 1 });
+
+    res.json({
+      success: true,
+      users
+    });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve users'
+    });
+  }
+};
+
 // Get user's public key
 export const getPublicKey = async (req, res) => {
   try {

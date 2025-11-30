@@ -222,3 +222,34 @@ export const getKeyExchange = async (req, res) => {
   }
 };
 
+// Get completed key exchanges for a user (both as initiator and responder)
+export const getCompletedExchanges = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Find exchanges where user is either initiator or responder and status is confirmed/completed
+    const exchanges = await KeyExchange.find({
+      $or: [
+        { fromUserId: userId },
+        { toUserId: userId }
+      ],
+      status: { $in: ['confirmed', 'completed', 'responded'] }
+    })
+      .populate('fromUserId', 'username _id')
+      .populate('toUserId', 'username _id')
+      .sort({ completedAt: -1, createdAt: -1 })
+      .select('exchangeId fromUserId toUserId status confirmed completedAt createdAt');
+
+    res.json({
+      success: true,
+      exchanges
+    });
+  } catch (error) {
+    console.error('Get completed exchanges error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve completed exchanges'
+    });
+  }
+};
+
