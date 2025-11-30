@@ -1,0 +1,82 @@
+MONGODB CONNECTION STRING GUIDE
+================================
+
+The MongoDB connection string format depends on your setup:
+
+1. LOCAL MONGODB (No Authentication) - DEFAULT
+   ──────────────────────────────────────────────
+   Format: mongodb://localhost:27017/e2ee-messaging
+   
+   Use this if:
+   - You installed MongoDB locally
+   - You haven't set up authentication
+   - This is for development/testing
+   
+   ✅ This is the SIMPLEST option for development
+   ✅ No credentials needed
+   ✅ Works out of the box if MongoDB is running locally
+
+
+2. LOCAL MONGODB (With Authentication)
+   ────────────────────────────────────
+   Format: mongodb://username:password@localhost:27017/e2ee-messaging
+   
+   Use this if:
+   - You've enabled authentication on your local MongoDB
+   - You created a user with username/password
+   
+   Example:
+   MONGODB_URI=mongodb://myuser:mypassword@localhost:27017/e2ee-messaging
+
+
+3. MONGODB ATLAS (Cloud - Always Requires Credentials)
+   ────────────────────────────────────────────────────
+   Format: mongodb+srv://username:password@cluster.mongodb.net/e2ee-messaging
+   
+   Use this if:
+   - You're using MongoDB Atlas (free cloud database)
+   - You need remote access
+   - You want a managed database
+   
+   Steps to get Atlas connection string:
+   1. Go to https://www.mongodb.com/cloud/atlas
+   2. Create a free account
+   3. Create a cluster
+   4. Click "Connect" → "Connect your application"
+   5. Copy the connection string
+   6. Replace <password> with your database user password
+   7. Replace <dbname> with "e2ee-messaging" (or your preferred name)
+   
+   Example:
+   MONGODB_URI=mongodb+srv://myuser:mypassword123@cluster0.xxxxx.mongodb.net/e2ee-messaging?retryWrites=true&w=majority
+
+
+RECOMMENDATION FOR YOUR PROJECT:
+─────────────────────────────────
+For development, use Option 1 (local without auth):
+  MONGODB_URI=mongodb://localhost:27017/e2ee-messaging
+
+This is the simplest and works if:
+- MongoDB is installed and running on your machine
+- You haven't configured authentication
+- You're working locally
+
+HOW TO CHECK IF MONGODB IS RUNNING:
+────────────────────────────────────
+Run this command:
+  mongosh
+  # OR
+  mongo
+
+If it connects, MongoDB is running!
+
+If you get "connection refused", start MongoDB:
+  # macOS (if installed via Homebrew):
+  brew services start mongodb-community
+  
+  # Linux:
+  sudo systemctl start mongod
+  
+  # Windows:
+  # Start MongoDB service from Services
+
