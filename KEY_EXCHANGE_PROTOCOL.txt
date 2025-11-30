@@ -1,0 +1,93 @@
+KEY EXCHANGE PROTOCOL DESIGN
+============================
+
+Protocol Name: ECDH-Based Key Exchange with Digital Signatures
+
+OVERVIEW:
+---------
+This protocol uses Elliptic Curve Diffie-Hellman (ECDH) for key agreement,
+combined with RSA digital signatures for authenticity, to establish a secure
+session key between two users.
+
+PROTOCOL FLOW:
+--------------
+
+Step 1: INITIATION
+  - User A wants to establish a secure channel with User B
+  - User A generates an ephemeral ECDH key pair (P-256)
+  - User A retrieves User B's public key from server
+  - User A creates an initiation message:
+    {
+      fromUserId: A's user ID,
+      toUserId: B's user ID,
+      ephemeralPublicKey: A's ECDH public key (SPKI format, base64),
+      timestamp: current timestamp,
+      nonce: random nonce
+    }
+  - User A signs the message with their RSA private key
+  - User A sends to server: POST /api/key-exchange/initiate
+
+Step 2: SERVER RELAY
+  - Server validates the request
+  - Server stores the key exchange request
+  - Server notifies User B (or User B polls for pending exchanges)
+
+Step 3: RESPONSE
+  - User B retrieves the initiation request
+  - User B generates their own ephemeral ECDH key pair
+  - User B verifies User A's signature
+  - User B derives the shared secret using ECDH
+  - User B derives session key using HKDF
+  - User B creates response message:
+    {
+      exchangeId: key exchange ID,
+      ephemeralPublicKey: B's ECDH public key (SPKI format, base64),
+      keyConfirmation: HMAC of session key + nonce,
+      timestamp: current timestamp,
+      nonce: new random nonce
+    }
+  - User B signs the response with their RSA private key
+  - User B sends to server: POST /api/key-exchange/respond
+
+Step 4: KEY DERIVATION (User A)
+  - User A receives the response
+  - User A verifies User B's signature
+  - User A derives the shared secret using ECDH
+  - User A derives session key using HKDF
+  - User A verifies key confirmation (HMAC)
+  - User A sends key confirmation back: POST /api/key-exchange/confirm
+
+Step 5: KEY CONFIRMATION (User B)
+  - User B receives confirmation
+  - Both users now have the same session key
+  - Session key is stored securely for encrypted communication
+
+SECURITY FEATURES:
+------------------
+1. Digital Signatures: Prevent MITM attacks
+2. Ephemeral Keys: Forward secrecy (keys are temporary)
+3. Nonces: Prevent replay attacks
+4. Timestamps: Additional replay protection
+5. Key Confirmation: Ensure both parties derived the same key
+6. HKDF: Secure key derivation from shared secret
+
+KEY DERIVATION:
+---------------
+- Input: ECDH shared secret (raw bytes)
+- Method: HKDF (HMAC-based Key Derivation Function)
+- Hash: SHA-256
+- Info: "E2EE-SessionKey" + fromUserId + toUserId
+- Output: 256-bit session key
+
+DIGITAL SIGNATURES:
+-------------------
+- Algorithm: RSA-PSS or RSA-PKCS1-v1_5
+- Hash: SHA-256
+- Key: User's RSA private key (from registration)
+
+KEY STORAGE:
+------------
+- Session keys stored in IndexedDB
+- Indexed by: exchangeId or (fromUserId, toUserId)
+- Expires after: 24 hours (or configurable)
+

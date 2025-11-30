@@ -67,7 +67,13 @@ export async function generateECCKeyPair(namedCurve = 'P-256') {
 export async function exportPublicKey(publicKey) {
   try {
     const exported = await window.crypto.subtle.exportKey('spki', publicKey);
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(exported)));
+    const bytes = new Uint8Array(exported);
+    // Use a more robust base64 encoding method
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
     return base64;
   } catch (error) {
     console.error('Error exporting public key:', error);
@@ -100,10 +106,22 @@ export async function exportPrivateKey(privateKey) {
  */
 export async function importPublicKey(base64Key, algorithm = 'RSA-OAEP', namedCurve = null) {
   try {
-    const binaryString = atob(base64Key);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+    // Validate and clean input
+    if (!base64Key || typeof base64Key !== 'string') {
+      throw new Error('Invalid base64 key: must be a non-empty string');
+    }
+    const cleanKey = base64Key.trim().replace(/\s/g, '');
+    
+    let binaryString;
+    let bytes;
+    try {
+      binaryString = atob(cleanKey);
+      bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+    } catch (e) {
+      throw new Error(`Invalid base64 encoding: ${e.message}`);
     }
 
     let keyAlgorithm;
@@ -124,18 +142,45 @@ export async function importPublicKey(base64Key, algorithm = 'RSA-OAEP', namedCu
       throw new Error('Unsupported algorithm');
     }
 
+    // Determine key usages based on algorithm
+    let keyUsages;
+    if (algorithm === 'RSA-OAEP') {
+      keyUsages = ['encrypt'];
+    } else if (algorithm === 'ECDH') {
+      // For ECDH public keys, use empty array []
+      // The public key doesn't have usages - it's used as input to deriveBits with a private key
+      keyUsages = [];
+    } else {
+      throw new Error('Unsupported algorithm for key import');
+    }
+
+    console.log('Importing public key:', { 
+      algorithm, 
+      namedCurve, 
+      keyUsages, 
+      keyLength: bytes.length,
+      base64Length: cleanKey.length
+    });
+
+    // Import the key
     const publicKey = await window.crypto.subtle.importKey(
       'spki',
       bytes,
       keyAlgorithm,
-      true,
-      algorithm === 'RSA-OAEP' ? ['encrypt'] : ['deriveKey', 'deriveBits']
+      true, // Extractable
+      keyUsages
     );
 
     return publicKey;
   } catch (error) {
     console.error('Error importing public key:', error);
-    throw error;
+    console.error('Key details:', { 
+      algorithm, 
+      namedCurve, 
+      base64Length: base64Key?.length,
+      keyUsages: algorithm === 'ECDH' ? ['deriveBits'] : ['encrypt']
+    });
+    throw new Error(`Failed to import ${algorithm} public key: ${error.message}`);
   }
 }
 

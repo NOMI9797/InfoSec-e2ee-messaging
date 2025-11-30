@@ -1,0 +1,204 @@
+KEY EXCHANGE PROTOCOL FLOW DIAGRAM
+===================================
+
+This diagram shows the complete key exchange protocol flow between User A and User B.
+
+┌─────────────┐                                    ┌─────────────┐
+│   User A    │                                    │   User B    │
+│ (Initiator) │                                    │ (Responder) │
+└──────┬──────┘                                    └──────┬──────┘
+       │                                                   │
+       │  STEP 1: INITIATION                              │
+       │  ───────────────────                             │
+       │                                                   │
+       │  1.1 Generate ephemeral ECDH key pair (P-256)     │
+       │  1.2 Retrieve User B's RSA public key            │
+       │  1.3 Create initiation message:                  │
+       │      {                                            │
+       │        fromUserId: A,                            │
+       │        toUserId: B,                               │
+       │        ephemeralPublicKey: A_ECDH_pub,            │
+       │        timestamp,                                 │
+       │        nonce                                      │
+       │      }                                            │
+       │  1.4 Sign message with A's RSA private key       │
+       │                                                   │
+       │  POST /api/key-exchange/initiate                  │
+       │  ────────────────────────────────►                │
+       │  {message, signature}                            │
+       │                                                   │
+       │                                                   │  STEP 2: SERVER RELAY
+       │                                                   │  ────────────────────
+       │                                                   │
+       │                                                   │  2.1 Server validates request
+       │                                                   │  2.2 Store key exchange record
+       │                                                   │  2.3 Generate exchangeId
+       │                                                   │
+       │  ◄────────────────────────────────                │
+       │  {exchangeId, status: "pending"}                  │
+       │                                                   │
+       │                                                   │  STEP 3: RESPONSE
+       │                                                   │  ─────────────────
+       │                                                   │
+       │                                                   │  3.1 User B polls/retrieves
+       │                                                   │      pending exchanges
+       │                                                   │
+       │  GET /api/key-exchange/pending/:userId            │
+       │  ◄────────────────────────────────                │
+       │  {exchanges: [...]}                              │
+       │                                                   │
+       │                                                   │  3.2 Verify User A's signature
+       │                                                   │  3.3 Generate ephemeral ECDH
+       │                                                   │      key pair (P-256)
+       │                                                   │  3.4 Derive shared secret:
+       │                                                   │      ECDH(B_priv, A_pub)
+       │                                                   │  3.5 Derive session key:
+       │                                                   │      HKDF(sharedSecret, info)
+       │                                                   │  3.6 Create key confirmation:
+       │                                                   │      HMAC(sessionKey, nonce)
+       │                                                   │  3.7 Create response message:
+       │                                                   │      {
+       │                                                   │        exchangeId,
+       │                                                   │        ephemeralPublicKey: B_ECDH_pub,
+       │                                                   │        keyConfirmation,
+       │                                                   │        timestamp,
+       │                                                   │        nonce
+       │                                                   │      }
+       │                                                   │  3.8 Sign with B's RSA key
+       │                                                   │
+       │                                                   │  POST /api/key-exchange/respond
+       │  ◄────────────────────────────────                │
+       │  {message, signature}                            │
+       │                                                   │
+       │  STEP 4: KEY DERIVATION (User A)                  │
+       │  ────────────────────────────────                 │
+       │                                                   │
+       │  4.1 Verify User B's signature                   │
+       │  4.2 Derive shared secret:                        │
+       │      ECDH(A_priv, B_pub)                          │
+       │  4.3 Derive session key:                          │
+       │      HKDF(sharedSecret, info)                     │
+       │  4.4 Verify key confirmation:                     │
+       │      HMAC(sessionKey, nonce) == keyConfirmation   │
+       │  4.5 Store session key locally                   │
+       │                                                   │
+       │  POST /api/key-exchange/confirm                   │
+       │  ────────────────────────────────►                │
+       │  {exchangeId, confirmed: true}                    │
+       │                                                   │
+       │                                                   │  STEP 5: KEY CONFIRMATION
+       │                                                   │  ─────────────────────────
+       │                                                   │
+       │                                                   │  5.1 Receive confirmation
+       │                                                   │  5.2 Both users have same
+       │                                                   │      session key
+       │                                                   │  5.3 Ready for encrypted
+       │                                                   │      communication
+       │                                                   │
+       │  ┌─────────────────────────────────────────────┐ │
+       │  │  Both users now share the same session key  │ │
+       │  │  Session key stored in IndexedDB            │ │
+       │  │  Ready for E2EE messaging                   │ │
+       │  └─────────────────────────────────────────────┘ │
+       │                                                   │
+
+
+SECURITY FEATURES IN EACH STEP:
+────────────────────────────────
+
+Step 1 (Initiation):
+  ✓ Ephemeral keys (forward secrecy)
+  ✓ Digital signature (authenticity)
+  ✓ Nonce (replay protection)
+  ✓ Timestamp (replay protection)
+
+Step 2 (Server Relay):
+  ✓ Server only stores metadata
+  ✓ No access to private keys
+  ✓ No access to session keys
+
+Step 3 (Response):
+  ✓ Signature verification
+  ✓ Ephemeral keys
+  ✓ Key confirmation HMAC
+  ✓ Nonce
+
+Step 4 (Key Derivation):
+  ✓ Signature verification
+  ✓ Key confirmation verification
+  ✓ Secure key derivation (HKDF)
+
+Step 5 (Confirmation):
+  ✓ Both parties confirmed
+  ✓ Session key established
+
+
+MESSAGE FORMATS:
+───────────────
+
+Initiation Message:
+{
+  fromUserId: string,
+  toUserId: string,
+  ephemeralPublicKey: string (base64 SPKI),
+  timestamp: number,
+  nonce: string (base64),
+  signature: string (base64 RSA-PSS)
+}
+
+Response Message:
+{
+  exchangeId: string,
+  ephemeralPublicKey: string (base64 SPKI),
+  keyConfirmation: string (base64 HMAC),
+  timestamp: number,
+  nonce: string (base64),
+  signature: string (base64 RSA-PSS)
+}
+
+Confirmation Message:
+{
+  exchangeId: string,
+  confirmed: boolean
+}
+
+
+KEY DERIVATION DETAILS:
+───────────────────────
+
+HKDF Parameters:
+  - Input: ECDH shared secret (256 bits)
+  - Hash: SHA-256
+  - Salt: None (can be improved)
+  - Info: "E2EE-SessionKey-{fromUserId}-{toUserId}-{nonce}"
+  - Output: 256-bit AES-GCM key
+
+Key Confirmation:
+  - Algorithm: HMAC-SHA-256
+  - Input: sessionKey + nonce
+  - Output: 256-bit HMAC
+
+
+PROTOCOL SECURITY ANALYSIS:
+───────────────────────────
+
+MITM Attack Prevention:
+  ✓ Digital signatures ensure authenticity
+  ✓ Public keys retrieved from trusted server
+  ✓ Signature verification at each step
+
+Replay Attack Prevention:
+  ✓ Nonces in each message
+  ✓ Timestamps
+  ✓ Exchange IDs (one-time use)
+  ✓ Expiration (1 hour)
+
+Forward Secrecy:
+  ✓ Ephemeral ECDH keys (temporary)
+  ✓ Keys discarded after session
+
+Key Confirmation:
+  ✓ HMAC verification ensures both parties
+    derived the same key
+  ✓ Prevents key mismatch attacks
+
