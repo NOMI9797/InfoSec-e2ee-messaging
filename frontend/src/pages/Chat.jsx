@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { sendEncryptedMessage, getAndDecryptMessages } from '../utils/messageUtils.js';
+import { sendEncryptedMessage, getAndDecryptMessages, sendEncryptedFile, getAndDecryptFile, downloadFile } from '../utils/messageUtils.js';
 import { getSessionKey, getAllSessionKeyIds } from '../utils/keyStorage.js';
 import api from '../services/api.js';
 import './Chat.css';
@@ -13,8 +13,12 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState(null);
+  const [downloadingFiles, setDownloadingFiles] = useState(new Set());
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Get current user info
   useEffect(() => {
@@ -283,6 +287,91 @@ const Chat = () => {
     }
   };
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      handleSendFile(file);
+    }
+    // Reset input
+    e.target.value = '';
+  };
+
+  const handleSendFile = async (file) => {
+    if (!selectedUser || !exchangeId || !currentUser) {
+      setError('Please select a user and complete key exchange first.');
+      return;
+    }
+
+    // Check file size (limit to 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      setError('File size exceeds 50MB limit.');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    setError(null);
+
+    try {
+      const currentUserId = String(currentUser.id || currentUser._id);
+      const selectedUserId = String(selectedUser._id || selectedUser.id);
+
+      // Send encrypted file with progress callback
+      await sendEncryptedFile(
+        currentUserId,
+        selectedUserId,
+        file,
+        exchangeId,
+        (progress) => setUploadProgress(progress)
+      );
+
+      // Reload messages to show the new file
+      await loadMessages();
+    } catch (error) {
+      console.error('Error sending file:', error);
+      setError('Failed to send file: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleDownloadFile = async (message) => {
+    if (!exchangeId) {
+      setError('Session key not found. Please complete key exchange again.');
+      return;
+    }
+
+    const messageId = message._id || message.id;
+    setDownloadingFiles(prev => new Set(prev).add(messageId));
+
+    try {
+      // Decrypt file
+      const decryptedBlob = await getAndDecryptFile(message, exchangeId);
+      
+      // Download file
+      downloadFile(decryptedBlob, message.fileName);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      setError('Failed to download file: ' + error.message);
+    } finally {
+      setDownloadingFiles(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(messageId);
+        return newSet;
+      });
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
@@ -365,7 +454,25 @@ const Chat = () => {
                           </span>
                         </div>
                         <div className="message-content">
-                          {msg.decryptionError ? (
+                          {msg.messageType === 'file' ? (
+                            <div className="file-message">
+                              <div className="file-icon">📎</div>
+                              <div className="file-info">
+                                <div className="file-name">{msg.fileName || 'Unknown file'}</div>
+                                <div className="file-details">
+                                  {msg.fileSize && <span>{formatFileSize(msg.fileSize)}</span>}
+                                  {msg.fileType && <span className="file-type">{msg.fileType}</span>}
+                                </div>
+                              </div>
+                              <button
+                                className="btn-download"
+                                onClick={() => handleDownloadFile(msg)}
+                                disabled={downloadingFiles.has(msg._id || msg.id)}
+                              >
+                                {downloadingFiles.has(msg._id || msg.id) ? '⏳' : '⬇️'} Download
+                              </button>
+                            </div>
+                          ) : msg.decryptionError ? (
                             <span className="error-text">{msg.plaintext}</span>
                           ) : (
                             <span>{msg.plaintext}</span>
@@ -385,19 +492,35 @@ const Chat = () => {
               
               <form className="message-input-form" onSubmit={handleSendMessage}>
                 <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="file-input-hidden"
+                  onChange={handleFileSelect}
+                  disabled={!exchangeId || loading || uploading}
+                />
+                <button
+                  type="button"
+                  className="btn-attach"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!exchangeId || loading || uploading}
+                  title="Attach file"
+                >
+                  📎
+                </button>
+                <input
                   type="text"
                   className="message-input"
                   placeholder={exchangeId ? "Type a message..." : "Complete key exchange first"}
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
-                  disabled={!exchangeId || loading}
+                  disabled={!exchangeId || loading || uploading}
                 />
                 <button 
                   type="submit" 
                   className="btn-send"
-                  disabled={!exchangeId || loading || !messageInput.trim()}
+                  disabled={!exchangeId || loading || uploading || !messageInput.trim()}
                 >
-                  {loading ? 'Sending...' : 'Send'}
+                  {loading ? 'Sending...' : uploading ? `Uploading ${uploadProgress}%...` : 'Send'}
                 </button>
               </form>
             </>

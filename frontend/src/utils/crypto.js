@@ -336,3 +336,135 @@ export async function decryptMessage(ciphertext, iv, tag, sessionKey) {
   }
 }
 
+/**
+ * Encrypt file using AES-256-GCM with chunking support
+ * @param {File|Blob} file - File to encrypt
+ * @param {CryptoKey} sessionKey - AES-GCM session key
+ * @param {number} chunkSize - Chunk size in bytes (default: 1MB)
+ * @returns {Promise<{chunks: Array<{ciphertext: string, iv: string, tag: string}>, fileName: string, fileType: string, fileSize: number}>}
+ */
+export async function encryptFile(file, sessionKey, chunkSize = 1024 * 1024) {
+  try {
+    const fileName = file.name;
+    const fileType = file.type || 'application/octet-stream';
+    const fileSize = file.size;
+    
+    // Read file as ArrayBuffer
+    const fileBuffer = await file.arrayBuffer();
+    const fileBytes = new Uint8Array(fileBuffer);
+    
+    // Split into chunks
+    const chunks = [];
+    const totalChunks = Math.ceil(fileBytes.length / chunkSize);
+    
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * chunkSize;
+      const end = Math.min(start + chunkSize, fileBytes.length);
+      const chunk = fileBytes.slice(start, end);
+      
+      // Generate random IV for each chunk
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      
+      // Encrypt chunk
+      const encryptedData = await window.crypto.subtle.encrypt(
+        {
+          name: 'AES-GCM',
+          iv: iv,
+          tagLength: 128
+        },
+        sessionKey,
+        chunk
+      );
+      
+      // Extract ciphertext and tag
+      const encryptedArray = new Uint8Array(encryptedData);
+      const tagLength = 16;
+      const actualCiphertext = encryptedArray.slice(0, -tagLength);
+      const tag = encryptedArray.slice(-tagLength);
+      
+      // Convert to base64
+      const ciphertextBase64 = btoa(String.fromCharCode(...actualCiphertext));
+      const ivBase64 = btoa(String.fromCharCode(...iv));
+      const tagBase64 = btoa(String.fromCharCode(...tag));
+      
+      chunks.push({
+        chunkIndex: i,
+        ciphertext: ciphertextBase64,
+        iv: ivBase64,
+        tag: tagBase64,
+        size: chunk.length
+      });
+    }
+    
+    return {
+      chunks,
+      fileName,
+      fileType,
+      fileSize,
+      totalChunks
+    };
+  } catch (error) {
+    console.error('Error encrypting file:', error);
+    throw error;
+  }
+}
+
+/**
+ * Decrypt file chunks and reconstruct file
+ * @param {Array<{ciphertext: string, iv: string, tag: string}>} chunks - Encrypted file chunks
+ * @param {CryptoKey} sessionKey - AES-GCM session key
+ * @param {string} fileName - Original file name
+ * @param {string} fileType - Original file type
+ * @returns {Promise<Blob>} Decrypted file as Blob
+ */
+export async function decryptFile(chunks, sessionKey, fileName, fileType) {
+  try {
+    // Sort chunks by index to ensure correct order
+    const sortedChunks = [...chunks].sort((a, b) => a.chunkIndex - b.chunkIndex);
+    
+    // Decrypt each chunk
+    const decryptedChunks = await Promise.all(
+      sortedChunks.map(async (chunk) => {
+        // Decode base64
+        const ciphertextBytes = Uint8Array.from(atob(chunk.ciphertext), c => c.charCodeAt(0));
+        const ivBytes = Uint8Array.from(atob(chunk.iv), c => c.charCodeAt(0));
+        const tagBytes = Uint8Array.from(atob(chunk.tag), c => c.charCodeAt(0));
+        
+        // Combine ciphertext and tag
+        const ciphertextWithTag = new Uint8Array(ciphertextBytes.length + tagBytes.length);
+        ciphertextWithTag.set(ciphertextBytes);
+        ciphertextWithTag.set(tagBytes, ciphertextBytes.length);
+        
+        // Decrypt chunk
+        const decryptedBytes = await window.crypto.subtle.decrypt(
+          {
+            name: 'AES-GCM',
+            iv: ivBytes,
+            tagLength: 128
+          },
+          sessionKey,
+          ciphertextWithTag
+        );
+        
+        return new Uint8Array(decryptedBytes);
+      })
+    );
+    
+    // Combine all decrypted chunks
+    const totalSize = decryptedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const combinedFile = new Uint8Array(totalSize);
+    let offset = 0;
+    
+    for (const chunk of decryptedChunks) {
+      combinedFile.set(chunk, offset);
+      offset += chunk.length;
+    }
+    
+    // Create Blob from decrypted data
+    return new Blob([combinedFile], { type: fileType });
+  } catch (error) {
+    console.error('Error decrypting file:', error);
+    throw new Error('Failed to decrypt file. The file may be corrupted or the key is incorrect.');
+  }
+}
+

@@ -8,7 +8,7 @@ import User from '../models/User.model.js';
  */
 export const sendMessage = async (req, res) => {
   try {
-    const { fromUserId, toUserId, exchangeId, ciphertext, iv, tag, timestamp, messageType, fileName, fileSize, fileType } = req.body;
+    const { fromUserId, toUserId, exchangeId, ciphertext, iv, tag, timestamp, messageType, fileName, fileSize, fileType, totalChunks } = req.body;
 
     // Validation
     if (!fromUserId || !toUserId || !ciphertext || !iv || !tag) {
@@ -42,7 +42,7 @@ export const sendMessage = async (req, res) => {
       fromUserId,
       toUserId,
       exchangeId: exchangeId || null, // Store exchangeId for reference
-      ciphertext, // Encrypted message (base64)
+      ciphertext, // Encrypted message (base64) or JSON string of chunks for files
       iv,         // Initialization vector (base64)
       tag,        // Authentication tag (base64)
       timestamp: timestamp ? new Date(timestamp) : new Date(),
@@ -50,6 +50,7 @@ export const sendMessage = async (req, res) => {
       fileName: fileName || null,
       fileSize: fileSize || null,
       fileType: fileType || null,
+      totalChunks: totalChunks || null,
       status: 'sent'
     });
 

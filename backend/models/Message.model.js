@@ -55,6 +55,10 @@ const messageSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  totalChunks: {
+    type: Number,
+    required: false // Number of chunks for file messages
+  },
   // Status tracking
   status: {
     type: String,
