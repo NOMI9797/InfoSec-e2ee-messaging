@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.model.js';
+import { logAuthAttempt, logSecurityEvent, extractRequestInfo } from '../utils/securityLogger.js';
 
 // Register new user
 export const register = async (req, res) => {
@@ -59,6 +60,17 @@ export const register = async (req, res) => {
       { expiresIn: '7d' }
     );
 
+    // Log successful registration
+    await logSecurityEvent({
+      eventType: 'AUTH_ATTEMPT',
+      severity: 'INFO',
+      userId: user._id,
+      username: user.username,
+      ...extractRequestInfo(req),
+      success: true,
+      details: { action: 'register' }
+    });
+
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
@@ -94,6 +106,8 @@ export const login = async (req, res) => {
     // Find user
     const user = await User.findOne({ username });
     if (!user) {
+      // Log failed login attempt
+      await logAuthAttempt(req, username, false, 'User not found');
       return res.status(401).json({ 
         success: false,
         error: 'Invalid username or password' 
@@ -103,6 +117,8 @@ export const login = async (req, res) => {
     // Verify password
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
+      // Log failed login attempt
+      await logAuthAttempt(req, username, false, 'Invalid password');
       return res.status(401).json({ 
         success: false,
         error: 'Invalid username or password' 
@@ -115,6 +131,9 @@ export const login = async (req, res) => {
       process.env.JWT_SECRET || 'your-secret-key-change-this',
       { expiresIn: '7d' }
     );
+
+    // Log successful login
+    await logAuthAttempt(req, username, true);
 
     res.json({
       success: true,

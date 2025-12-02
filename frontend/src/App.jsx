@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Chat from './pages/Chat';
+import SecurityLogs from './pages/SecurityLogs';
 import KeyExchangeTest from './components/KeyExchangeTest';
 import './App.css';
 
@@ -23,6 +24,10 @@ function App() {
         <Route 
           path="/test-key-exchange" 
           element={isAuthenticated() ? <KeyExchangeTest /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/security-logs" 
+          element={isAuthenticated() ? <SecurityLogs /> : <Navigate to="/login" />} 
         />
         <Route path="/" element={<Navigate to="/login" />} />
       </Routes>

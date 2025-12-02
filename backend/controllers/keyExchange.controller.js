@@ -1,6 +1,7 @@
 import KeyExchange from '../models/KeyExchange.model.js';
 import User from '../models/User.model.js';
 import { randomUUID } from 'crypto';
+import { logKeyExchange, extractRequestInfo } from '../utils/securityLogger.js';
 
 // Initiate key exchange
 export const initiateKeyExchange = async (req, res) => {
@@ -42,6 +43,16 @@ export const initiateKeyExchange = async (req, res) => {
     });
 
     await keyExchange.save();
+
+    // Log key exchange initiation
+    await logKeyExchange(
+      req,
+      'KEY_EXCHANGE_INITIATE',
+      fromUserId,
+      fromUser.username,
+      exchangeId,
+      true
+    );
 
     res.status(201).json({
       success: true,
@@ -99,6 +110,17 @@ export const respondToKeyExchange = async (req, res) => {
 
     // Get initiator's public key for client
     const fromUser = await User.findById(keyExchange.fromUserId).select('publicKey username');
+    const toUser = await User.findById(keyExchange.toUserId).select('username');
+
+    // Log key exchange response
+    await logKeyExchange(
+      req,
+      'KEY_EXCHANGE_RESPOND',
+      keyExchange.toUserId,
+      toUser.username,
+      exchangeId,
+      true
+    );
 
     res.json({
       success: true,
@@ -156,6 +178,20 @@ export const confirmKeyExchange = async (req, res) => {
     keyExchange.completedAt = new Date();
 
     await keyExchange.save();
+
+    // Get user info for logging
+    const fromUser = await User.findById(keyExchange.fromUserId).select('username');
+    const toUser = await User.findById(keyExchange.toUserId).select('username');
+
+    // Log key exchange completion
+    await logKeyExchange(
+      req,
+      'KEY_EXCHANGE_COMPLETE',
+      keyExchange.fromUserId,
+      fromUser.username,
+      exchangeId,
+      true
+    );
 
     res.json({
       success: true,

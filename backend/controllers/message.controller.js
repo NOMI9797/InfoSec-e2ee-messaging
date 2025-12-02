@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import Message from '../models/Message.model.js';
 import User from '../models/User.model.js';
+import { validateReplayProtection } from '../middleware/replayProtection.js';
+import { logSecurityEvent, logDecryption, extractRequestInfo } from '../utils/securityLogger.js';
 
 /**
  * Send a message (encrypted on client side)
@@ -8,7 +10,7 @@ import User from '../models/User.model.js';
  */
 export const sendMessage = async (req, res) => {
   try {
-    const { fromUserId, toUserId, exchangeId, ciphertext, iv, tag, timestamp, messageType, fileName, fileSize, fileType, totalChunks } = req.body;
+    const { fromUserId, toUserId, exchangeId, ciphertext, iv, tag, timestamp, messageType, fileName, fileSize, fileType, totalChunks, sequenceNumber, nonce } = req.body;
 
     // Validation
     if (!fromUserId || !toUserId || !ciphertext || !iv || !tag) {
@@ -37,6 +39,26 @@ export const sendMessage = async (req, res) => {
       });
     }
 
+    // Validate replay protection if exchangeId is provided
+    if (exchangeId) {
+      const validation = await validateReplayProtection(
+        exchangeId,
+        fromUserId,
+        toUserId,
+        sequenceNumber,
+        nonce,
+        timestamp || Date.now(),
+        req
+      );
+
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: validation.reason || 'Replay protection validation failed'
+        });
+      }
+    }
+
     // Create message (server cannot decrypt - only stores encrypted data)
     const message = new Message({
       fromUserId,
@@ -51,10 +73,28 @@ export const sendMessage = async (req, res) => {
       fileSize: fileSize || null,
       fileType: fileType || null,
       totalChunks: totalChunks || null,
+      sequenceNumber: sequenceNumber || null,
+      nonce: nonce || null,
       status: 'sent'
     });
 
     await message.save();
+
+    // Log message sent
+    await logSecurityEvent({
+      eventType: 'MESSAGE_SENT',
+      severity: 'INFO',
+      userId: fromUserId,
+      username: fromUser.username,
+      ...extractRequestInfo(req),
+      details: {
+        messageId: message._id,
+        exchangeId,
+        messageType,
+        toUserId: toUserId.toString()
+      },
+      success: true
+    });
 
     res.status(201).json({
       success: true,
@@ -84,7 +124,7 @@ export const sendMessage = async (req, res) => {
 export const getMessages = async (req, res) => {
   try {
     const { userId1, userId2 } = req.params;
-    const { limit = 50, before } = req.query;
+    const { limit = 50, before, currentUserId } = req.query;
 
     // Validation
     if (!userId1 || !userId2 || userId1 === 'undefined' || userId2 === 'undefined') {
@@ -122,6 +162,30 @@ export const getMessages = async (req, res) => {
       .select('fromUserId toUserId ciphertext iv tag messageType timestamp fileName fileSize fileType status createdAt')
       .populate('fromUserId', 'username')
       .populate('toUserId', 'username');
+
+    // Log message retrieval (MESSAGE_RECEIVED) for the current user
+    if (currentUserId && mongoose.Types.ObjectId.isValid(currentUserId)) {
+      const receivingUser = await User.findById(currentUserId);
+      if (receivingUser && messages.length > 0) {
+        // Determine the other user in the conversation
+        const otherUserId = String(currentUserId) === String(userId1) ? userId2 : userId1;
+        const otherUser = await User.findById(otherUserId);
+        
+        await logSecurityEvent({
+          eventType: 'MESSAGE_RECEIVED',
+          severity: 'INFO',
+          userId: currentUserId,
+          username: receivingUser.username,
+          ...extractRequestInfo(req),
+          details: {
+            messageCount: messages.length,
+            otherUserId: otherUserId.toString(),
+            otherUsername: otherUser?.username || 'Unknown'
+          },
+          success: true
+        });
+      }
+    }
 
     res.json({
       success: true,

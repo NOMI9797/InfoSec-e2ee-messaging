@@ -18,6 +18,17 @@ const messageSchema = new mongoose.Schema({
     required: false,
     index: true // Index for faster lookup by exchange
   },
+  // Replay protection fields
+  sequenceNumber: {
+    type: Number,
+    required: false,
+    index: true
+  },
+  nonce: {
+    type: String,
+    required: false,
+    index: true
+  },
   // Encrypted message components (server cannot decrypt)
   ciphertext: {
     type: String,

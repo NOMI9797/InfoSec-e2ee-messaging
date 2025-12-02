@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { sendEncryptedMessage, getAndDecryptMessages, sendEncryptedFile, getAndDecryptFile, downloadFile } from '../utils/messageUtils.js';
 import { getSessionKey, getAllSessionKeyIds } from '../utils/keyStorage.js';
 import api from '../services/api.js';
 import './Chat.css';
 
 const Chat = () => {
+  const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -385,6 +387,9 @@ const Chat = () => {
         <h2>🔒 Secure E2EE Messaging</h2>
         <div className="user-info">
           <span>User: {currentUser?.username || 'Loading...'}</span>
+          <button className="btn-security-logs" onClick={() => navigate('/security-logs')}>
+            Security Logs
+          </button>
           <button className="btn-logout" onClick={handleLogout}>Logout</button>
         </div>
       </div>

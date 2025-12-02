@@ -5,6 +5,7 @@
 
 import { encryptMessage, decryptMessage, encryptFile, decryptFile } from './crypto.js';
 import { getSessionKey } from './keyStorage.js';
+import { getNextSequenceNumber, generateNonce } from './sequenceManager.js';
 import api from '../services/api.js';
 
 /**
@@ -23,6 +24,11 @@ export async function sendEncryptedMessage(fromUserId, toUserId, plaintext, exch
     // Encrypt the message
     const { ciphertext, iv, tag } = await encryptMessage(plaintext, sessionKey);
     
+    // Get sequence number and generate nonce for replay protection
+    const sequenceNumber = await getNextSequenceNumber(exchangeId, fromUserId, toUserId);
+    const nonce = generateNonce();
+    const timestamp = Date.now();
+    
     // Send encrypted message to server
     const response = await api.post('/messages/send', {
       fromUserId,
@@ -31,8 +37,10 @@ export async function sendEncryptedMessage(fromUserId, toUserId, plaintext, exch
       ciphertext,
       iv,
       tag,
-      timestamp: Date.now(),
-      messageType: 'text'
+      timestamp,
+      messageType: 'text',
+      sequenceNumber,
+      nonce
     });
     
     return response.data;
@@ -55,8 +63,10 @@ export async function getAndDecryptMessages(userId1, userId2, exchangeId, curren
     // Retrieve session key from IndexedDB
     const sessionKey = await getSessionKey(exchangeId);
     
-    // Get encrypted messages from server
-    const response = await api.get(`/messages/${userId1}/${userId2}`);
+    // Get encrypted messages from server (pass currentUserId to log MESSAGE_RECEIVED)
+    const response = await api.get(`/messages/${userId1}/${userId2}`, {
+      params: { currentUserId }
+    });
     const encryptedMessages = response.data.messages;
     
     // Decrypt each message
@@ -87,6 +97,25 @@ export async function getAndDecryptMessages(userId1, userId2, exchangeId, curren
           };
         } catch (error) {
           console.error('Error decrypting message:', error);
+          
+          // Log decryption failure (client-side logging)
+          try {
+            await api.post('/security-logs', {
+              eventType: 'DECRYPTION_FAILURE',
+              severity: 'WARNING',
+              userId: currentUserId,
+              details: {
+                messageId: msg._id,
+                exchangeId,
+                error: error.message
+              },
+              success: false,
+              errorMessage: error.message
+            });
+          } catch (logError) {
+            console.error('Failed to log decryption error:', logError);
+          }
+          
           return {
             ...msg,
             plaintext: '[Unable to decrypt message]',
@@ -140,6 +169,11 @@ export async function sendEncryptedFile(fromUserId, toUserId, file, exchangeId, 
       progressCallback(50); // Encryption complete
     }
     
+    // Get sequence number and generate nonce for replay protection
+    const sequenceNumber = await getNextSequenceNumber(exchangeId, fromUserId, toUserId);
+    const nonce = generateNonce();
+    const timestamp = Date.now();
+    
     // Send encrypted file to server
     const response = await api.post('/messages/send', {
       fromUserId,
@@ -148,12 +182,14 @@ export async function sendEncryptedFile(fromUserId, toUserId, file, exchangeId, 
       ciphertext: JSON.stringify(chunks), // Store chunks as JSON string
       iv: chunks[0]?.iv || '', // First chunk's IV (for compatibility)
       tag: chunks[0]?.tag || '', // First chunk's tag (for compatibility)
-      timestamp: Date.now(),
+      timestamp,
       messageType: 'file',
       fileName,
       fileType,
       fileSize,
-      totalChunks
+      totalChunks,
+      sequenceNumber,
+      nonce
     });
     
     // Report progress
@@ -239,3 +275,4 @@ export function downloadFile(blob, fileName) {
     throw error;
   }
 }
+
