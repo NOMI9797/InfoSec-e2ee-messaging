@@ -312,4 +312,183 @@
   }
 }
 
+/* === New layout overrides for React SecurityLogs page === */
+
+.security-logs-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+}
+
+.security-logs-header {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 32px;
+  padding: 16px 24px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #5c6bf2, #8b4efc);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.security-logs-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.btn-back-to-chat {
+  padding: 6px 18px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+}
+
+.btn-back-to-chat:hover {
+  background: rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+.btn-back-to-chat:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.filters-card {
+  background-color: #f8f9fb;
+  padding: 20px 24px;
+  border-radius: 12px;
+  margin-bottom: 28px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.filters-card h2 {
+  margin: 0 0 16px;
+  color: #111827;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.form-group input,
+.form-group select {
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35);
+}
+
+.form-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+
+.btn-primary {
+  background: #6366f1;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.35);
+}
+
+.btn-primary:hover {
+  background: #4f46e5;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.btn-secondary:hover {
+  background: #d1d5db;
+}
+
+.logs-card {
+  background-color: #ffffff;
+  padding: 20px 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.logs-header h2 {
+  margin: 0 0 16px;
+  color: #111827;
+}
+
+@media (max-width: 768px) {
+  .security-logs-page {
+    padding: 12px;
+  }
+
+  .security-logs-header {
+    justify-content: space-between;
+    padding: 12px 16px;
+  }
+
+  .security-logs-title {
+    position: static;
+    transform: none;
+    font-size: 1.4rem;
+  }
+
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 
