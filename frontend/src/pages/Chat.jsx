@@ -387,6 +387,12 @@ const Chat = () => {
         <h2>🔒 Secure E2EE Messaging</h2>
         <div className="user-info">
           <span>User: {currentUser?.username || 'Loading...'}</span>
+          <button className="btn-key-exchange" onClick={() => navigate('/test-key-exchange')}>
+            🔑 Key Exchange
+          </button>
+          <button className="btn-attack-demo" onClick={() => navigate('/attack-demo')}>
+            🛡️ Attack Demo
+          </button>
           <button className="btn-security-logs" onClick={() => navigate('/security-logs')}>
             Security Logs
           </button>

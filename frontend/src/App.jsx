@@ -3,6 +3,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Chat from './pages/Chat';
 import SecurityLogs from './pages/SecurityLogs';
+import AttackDemo from './pages/AttackDemo';
 import KeyExchangeTest from './components/KeyExchangeTest';
 import './App.css';
 
@@ -28,6 +29,10 @@ function App() {
         <Route 
           path="/security-logs" 
           element={isAuthenticated() ? <SecurityLogs /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/attack-demo" 
+          element={isAuthenticated() ? <AttackDemo /> : <Navigate to="/login" />} 
         />
         <Route path="/" element={<Navigate to="/login" />} />
       </Routes>

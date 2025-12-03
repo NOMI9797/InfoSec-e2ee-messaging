@@ -7,6 +7,7 @@ import userRoutes from './routes/user.routes.js';
 import keyExchangeRoutes from './routes/keyExchange.routes.js';
 import messageRoutes from './routes/message.routes.js';
 import securityLogRoutes from './routes/securityLog.routes.js';
+import attackDemoRoutes from './routes/attackDemo.routes.js';
 import errorHandler from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -34,6 +35,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/key-exchange', keyExchangeRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/security-logs', securityLogRoutes);
+app.use('/api/attack-demo', attackDemoRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

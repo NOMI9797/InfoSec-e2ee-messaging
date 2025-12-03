@@ -18,7 +18,9 @@ const securityLogSchema = new mongoose.Schema({
       'MESSAGE_RECEIVED',
       'INVALID_NONCE',
       'INVALID_TIMESTAMP',
-      'INVALID_SEQUENCE'
+      'INVALID_SEQUENCE',
+      'ATTACK_DEMO_MITM',
+      'ATTACK_DEMO_REPLAY'
     ],
     required: true,
     index: true
