@@ -28,7 +28,7 @@ const AttackDemo = () => {
 
   const addLog = (category, message, type = 'info') => {
     const logEntry = {
-      id: Date.now(),
+      id: `${Date.now()}-${Math.random()}`, // Unique ID to prevent React key warnings
       timestamp: new Date().toLocaleTimeString(),
       category,
       message,
@@ -115,29 +115,58 @@ const AttackDemo = () => {
     addLog('replay', '🚀 Starting Replay Attack Demonstration...', 'info');
     
     try {
-      // Step 1: Get recent messages
-      addLog('replay', '📤 Step 1: Fetching recent messages...', 'info');
+      // Step 1: Get the most recent message to find the other user
+      addLog('replay', '📤 Step 1: Finding most recent message...', 'info');
       const currentUserId = localStorage.getItem('userId');
-      const usersResponse = await api.get('/users');
-      const users = usersResponse.data.users || [];
-      const otherUser = users.find(u => String(u._id) !== String(currentUserId));
       
-      if (!otherUser) {
-        addLog('replay', '❌ Need at least 2 users for replay attack demo', 'error');
+      // Get the most recent message
+      const recentMessageResponse = await api.get(`/messages/recent/${currentUserId}`);
+      
+      if (!recentMessageResponse.data.success || !recentMessageResponse.data.message) {
+        addLog('replay', '⚠️ No messages found. Send a message first to demonstrate replay attack.', 'warning');
+        addLog('replay', '   💡 Solution: Send a message to another user first', 'info');
+        addLog('replay', '   💡 Make sure key exchange is completed before sending', 'info');
         setIsRunning(false);
         return;
       }
       
+      const { message: recentMessage, otherUser } = recentMessageResponse.data;
+      
+      addLog('replay', `   ✅ Found most recent message with: ${otherUser.username} (${otherUser._id})`, 'success');
+      
+      // Now get all messages with this user
+      addLog('replay', '📤 Step 2: Fetching all messages with this user...', 'info');
       const messagesResponse = await api.get(`/messages/${currentUserId}/${otherUser._id}`);
       const messages = messagesResponse.data.messages || [];
       
-      if (messages.length === 0) {
-        addLog('replay', '⚠️ No messages found. Send a message first to demonstrate replay attack.', 'warning');
+      // Debug logging
+      console.log('Replay Attack Demo Debug:', {
+        currentUserId,
+        otherUser: otherUser._id,
+        messagesCount: messages.length,
+        messages: messages.map(m => ({
+          _id: m._id,
+          fromUserId: m.fromUserId?._id || m.fromUserId,
+          toUserId: m.toUserId?._id || m.toUserId,
+          exchangeId: m.exchangeId,
+          sequenceNumber: m.sequenceNumber,
+          nonce: m.nonce ? m.nonce.substring(0, 10) + '...' : null,
+          hasRequiredFields: !!(m.exchangeId && m.sequenceNumber && m.nonce)
+        }))
+      });
+      
+      // Filter messages that have required fields for replay protection
+      const validMessages = messages.filter(m => m.exchangeId && m.sequenceNumber && m.nonce);
+      
+      if (validMessages.length === 0) {
+        addLog('replay', '⚠️ No messages with replay protection fields found.', 'warning');
+        addLog('replay', '   Messages exist but are missing exchangeId, sequenceNumber, or nonce.', 'warning');
+        addLog('replay', '   Make sure messages were sent with key exchange completed.', 'info');
         setIsRunning(false);
         return;
       }
       
-      const lastMessage = messages[messages.length - 1];
+      const lastMessage = validMessages[validMessages.length - 1];
       addLog('replay', `✅ Found message: "${lastMessage.messageType === 'file' ? 'File' : 'Text message'}"`, 'success');
       addLog('replay', `   Timestamp: ${new Date(lastMessage.timestamp).toLocaleString()}`, 'info');
       addLog('replay', `   Sequence: ${lastMessage.sequenceNumber || 'N/A'}`, 'info');

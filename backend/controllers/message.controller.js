@@ -142,11 +142,15 @@ export const getMessages = async (req, res) => {
       });
     }
 
+    // Convert to ObjectId for proper querying
+    const userId1Obj = new mongoose.Types.ObjectId(userId1);
+    const userId2Obj = new mongoose.Types.ObjectId(userId2);
+
     // Build query
     const query = {
       $or: [
-        { fromUserId: userId1, toUserId: userId2 },
-        { fromUserId: userId2, toUserId: userId1 }
+        { fromUserId: userId1Obj, toUserId: userId2Obj },
+        { fromUserId: userId2Obj, toUserId: userId1Obj }
       ]
     };
 
@@ -155,11 +159,31 @@ export const getMessages = async (req, res) => {
       query.timestamp = { $lt: new Date(before) };
     }
 
+    // Debug logging
+    console.log('Get Messages Debug:', {
+      userId1: userId1,
+      userId2: userId2,
+      userId1Obj: userId1Obj.toString(),
+      userId2Obj: userId2Obj.toString(),
+      query
+    });
+
+    // Also check total messages in database for debugging
+    const totalMessages = await Message.countDocuments({});
+    const messagesForUser1 = await Message.countDocuments({ fromUserId: userId1Obj });
+    const messagesForUser2 = await Message.countDocuments({ fromUserId: userId2Obj });
+    console.log('Database Debug:', {
+      totalMessages,
+      messagesForUser1,
+      messagesForUser2,
+      queryResult: await Message.find(query).countDocuments()
+    });
+
     // Fetch messages (most recent first)
     const messages = await Message.find(query)
       .sort({ timestamp: -1 })
       .limit(parseInt(limit))
-      .select('fromUserId toUserId ciphertext iv tag messageType timestamp fileName fileSize fileType status createdAt')
+      .select('fromUserId toUserId exchangeId sequenceNumber nonce ciphertext iv tag messageType timestamp fileName fileSize fileType status createdAt')
       .populate('fromUserId', 'username')
       .populate('toUserId', 'username');
 
@@ -186,6 +210,12 @@ export const getMessages = async (req, res) => {
         });
       }
     }
+
+    // Debug: Log message count
+    console.log('Get Messages Result:', {
+      messagesFound: messages.length,
+      messagesWithReplayFields: messages.filter(m => m.exchangeId && m.sequenceNumber && m.nonce).length
+    });
 
     res.json({
       success: true,
@@ -263,6 +293,73 @@ export const getUnreadCount = async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get unread count'
+    });
+  }
+};
+
+/**
+ * Get the most recent message for a user
+ * Returns the message and the other user's ID
+ */
+export const getMostRecentMessage = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId || userId === 'undefined') {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid user ID format'
+      });
+    }
+
+    const userIdObj = new mongoose.Types.ObjectId(userId);
+
+    // Find the most recent message where user is either sender or receiver
+    const mostRecentMessage = await Message.findOne({
+      $or: [
+        { fromUserId: userIdObj },
+        { toUserId: userIdObj }
+      ]
+    })
+      .sort({ timestamp: -1 })
+      .select('fromUserId toUserId exchangeId sequenceNumber nonce timestamp')
+      .populate('fromUserId', 'username _id')
+      .populate('toUserId', 'username _id');
+
+    if (!mostRecentMessage) {
+      return res.json({
+        success: true,
+        message: null,
+        otherUser: null
+      });
+    }
+
+    // Determine the other user
+    const otherUserId = String(mostRecentMessage.fromUserId._id) === String(userId)
+      ? mostRecentMessage.toUserId
+      : mostRecentMessage.fromUserId;
+
+    res.json({
+      success: true,
+      message: mostRecentMessage,
+      otherUser: {
+        _id: otherUserId._id,
+        username: otherUserId.username
+      }
+    });
+  } catch (error) {
+    console.error('Get most recent message error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get most recent message'
     });
   }
 };
